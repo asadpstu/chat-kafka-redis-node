@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
    <head>
-      <title>Hello world</title>
+      <title>Node-Kafka-Redis-SOcket.io</title>
    </head>
    <script src = "http://localhost:5001/socket.io/socket.io.js"></script>
    <script src="https://code.jquery.com/jquery-3.5.1.js" integrity="sha256-QWo7LDvxbWT2tbbQ97B53yJnYU3WhH/C8ycbRAkjPDc=" crossorigin="anonymous"></script>
@@ -9,7 +9,7 @@
 
    <div>Join - <input type="text" id="generateId" placeholder="Generate Id" /> (Note: This is going to be user id)
       <button onclick="join()" id="joinButton">Join</button> 
-      <button onclick="getMissingMessage()" id="sendMessage" style="float:right">Get missing message</button> 
+      <button onclick="getMissingMessage()" id="sendMessage" style="float:right">Get missing message(One to One)</button> 
       <span id="userName" style="color:blueviolet;font-weight: bold;margin: 20px;"></span>
    </div>  
      
@@ -18,9 +18,12 @@
    <div  style="margin-bottom: 20px;">One-to-One Message</div>
    Receiver Id : <input id="receiver" type="text" placeholder="receiver">
    Your Message : <input id="message" type="text" placeholder="message">
-   
-   <button onclick="sendMessage()" id="sendMessage">send</button> 
-   
+   <button onclick="sendMessage()" id="sendMessage">SEND MESSAGE</button> 
+ 
+   <div style="margin-top:10px">
+   Browse Image : <input type="file" id="imagefile">   <input id="imgBS64" type="hidden">
+   <button onclick="sendMessageImg()" id="sendMessageImg">SEND IMAGE</button> 
+   </div>
    <div id="message-received"></div>
 
    <hr>
@@ -30,13 +33,23 @@
    Add User : 
    <input id="addUser" type="text" placeholder="Add user id">
    <button onclick="joinGroup()" id="joinGroup">Join</button>
+   <span id="joined-notification">
+
+   </span>
    <hr>
-   <div style="margin-bottom: 20px;">Group Message:</div>
-   <input id="receiverGroup" type="text" placeholder="Group name">
-   Write your Message : 
-   <input id="messageGroup" type="text" placeholder="Text Message">
+   <div style="">Group Message: <input id="receiverGroup" type="text" placeholder="Group name"></div>
+   <div style="margin-top:10px">
+   Your message : 
+      <input id="messageGroup" type="text" placeholder="Text Message">
+      <button onclick="sendMessageGroup()" id="sendMessageGroup">SEND MESSAGE</button>
+      
+   </div>
+
+   <div style="margin-top:10px">
+      Browse Image : <input type="file" id="imagefileGroup">   <input id="imgBS64Group" type="hidden">
+      <button onclick="sendMessageImgGroup()" id="sendMessageImgGroup">SEND IMAGE</button> 
+   </div>
    
-   <button onclick="sendMessageGroup()" id="sendMessageGroup">send message to Group</button> 
    <div id="GroupMessage" >Group Message will be appened here -</div><br>
 
    <script>
@@ -57,6 +70,10 @@
          socket.emit("join-group",{"groupName" : groupName, "memberName" : memberName})
       }
 
+      socket.on("joined-notification",data=>{
+         document.getElementById("joined-notification").innerHTML = data;
+      })
+
       function sendMessage()
       {
          socket.emit("send-message",{        
@@ -65,6 +82,54 @@
             "from": document.getElementById("generateId").value  
          })         
       }
+
+      //one-to-one msg
+      function sendMessageImg()
+      {
+         socket.emit('user-image-send', {
+            "message" : $("#imgBS64").val(),
+            "receiver": document.getElementById("receiver").value,
+            "from": document.getElementById("generateId").value  
+         });
+         $("#imgBS64").val("");
+
+      }
+
+      $('#imagefile').on('change', function(e){
+         $("#imgBS64").val("");
+         var file = e.originalEvent.target.files[0],
+         reader = new FileReader();
+         reader.onload = function(evt){
+            console.log(evt.target.result)
+            $("#imgBS64").val(evt.target.result);
+         };
+         reader.readAsDataURL(file);  
+      });
+
+
+      //Group Image
+      $('#imagefileGroup').on('change', function(e){
+         $("#imgBS64Group").val("");
+         var file = e.originalEvent.target.files[0],
+         reader = new FileReader();
+         reader.onload = function(evt){
+            $("#imgBS64Group").val(evt.target.result);
+         };
+         reader.readAsDataURL(file);  
+      });
+      
+      function sendMessageImgGroup()
+      {
+         socket.emit('user-image-send-group', {
+            "message" : $("#imgBS64Group").val(),
+            "receiver": document.getElementById("receiverGroup").value,
+            "from": document.getElementById("generateId").value  
+         });
+         $("#imgBS64Group").val("");
+
+      }
+
+
 
       socket.on("message-receive",data=>{
          //document.getElementById("message-received").innerHTML = data.message;
@@ -81,7 +146,16 @@
       }
 
       socket.on('Send-to-group', function(data){
-          $('#GroupMessage').append($('<li>').text(data.message +"[" + data.datetime + "]" + "(" + data.from + ")"));
+          console.log(data);
+          if(data.isImage === true)
+          {
+            $('#GroupMessage').append($('<p>').append('<img src="' + data.message + '" style="height:100px;height:100px;"/>'));
+          }
+          else
+          {
+            $('#GroupMessage').append($('<li>').text(data.message +"[" + data.datetime + "]" + "(" + data.from + ")"));
+          }
+         
       });
 
 
@@ -96,9 +170,10 @@
          $('#message-received').append($('<li>').text(data.message +"[" + data.datetime + "]" + "(" + data.from + ")"));
       })
 
+      socket.on('message-receive-img', (data)=>{
+         $('#message-received').append($('<p>').append('<img src="' + data.message + '" style="height:100px;height:100px;"/>'));
+      });
 
-      
-
-      
+            
    </script>
 </html>

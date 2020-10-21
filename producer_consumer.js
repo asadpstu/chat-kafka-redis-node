@@ -147,7 +147,53 @@ io.on('connection', socket => {
     if (groupInfo.indexOf(data.groupName) !== -1) {
       socket.join(data.groupName);
       console.log(data.memberName + 'joined the room:' + data.groupName);
+      io.sockets.to(socket.id).emit('joined-notification', "Successfully joined!");
     }
+  })
+
+  socket.on("user-image-send", data => {
+    var isOnline = false;
+    for (var i = 0; i < userPoolTemp.length; i++) {
+      if (userPoolTemp[i]["userId"] === data.receiver) {
+        var receiverSocketId = userPoolTemp[i].socketId;
+        isOnline = true;
+      }
+    }
+    var messageBody = {};
+    if (isOnline === true) {
+      messageBody = {
+        "message": data.message,
+        "receiver": data.receiver, //Unique Identity
+        "from": data.from,
+        "datetime": new Date(),
+        "online": isOnline,
+        "receiverSocketId": receiverSocketId, //For Instant message
+        "isGroup": false,
+        "isImage" : true
+      }
+    }
+    else {
+      messageBody = {
+        "message": data.message,
+        "receiver": data.receiver,  //Unique Identity
+        "from": data.from,
+        "datetime": new Date(),
+        "online": isOnline,
+        "receiverSocketId": "n/a",  //Sign for saving data to remote storage
+        "isGroup": false,
+        "isImage" : true
+      }
+    }
+
+
+
+    var msg = JSON.stringify(messageBody);
+
+    payloads = [{ topic: constants.TOPIC_CHAT, messages: msg, partition: 0 }];
+    producer.send(payloads, function (err, data) {
+      console.log("Producer received the pay load!");
+    });
+
   })
 
 
@@ -159,6 +205,31 @@ io.on('connection', socket => {
       "from": data.from,
       "datetime": new Date(),
       "isGroup": true
+    }
+
+    var msg = JSON.stringify(messageBody);
+    payloads = [{ topic: constants.TOPIC_CHAT, messages: msg, partition: 0 }];
+    
+    producer.send(payloads, function (err, data) {
+      console.log("Producer received the pay load for Group chat!");
+    });
+
+
+    //If not to use Kafka
+    //io.to(messageBody.receiver).emit('Send-to-group', messageBody);
+
+  })
+
+
+  socket.on("user-image-send-group", data => {
+    var messageBody = {};
+    messageBody = {
+      "message": data.message,
+      "receiver": data.receiver,
+      "from": data.from,
+      "datetime": new Date(),
+      "isGroup": true,
+      "isImage" : true
     }
 
     var msg = JSON.stringify(messageBody);
@@ -266,18 +337,35 @@ setTimeout(function () {
     }
 
 
-    if (messageBody.isGroup === true) {
-      io.sockets.to(messageBody.receiver).emit('Send-to-group', msg);
+    if (messageBody.isGroup === true) 
+    { 
+      if(msg.isImage === true)
+      {
+        io.sockets.to(messageBody.receiver).emit('Send-to-group', msg);
+      }
+      else
+      {
+        io.sockets.to(messageBody.receiver).emit('Send-to-group', messageBody);
+      }
+      
     }
 
     if (messageBody.isGroup === false) {
       if (messageBody.online === true) {
-        io.sockets.to(messageBody.receiverSocketId).emit("message-receive", messageBody);
+        if(msg.isImage === true)
+        {
+          io.sockets.to(messageBody.receiverSocketId).emit("message-receive-img", msg);
+        }
+        else
+        {
+          io.sockets.to(messageBody.receiverSocketId).emit("message-receive", messageBody);
+        }
+        
       }
       else 
       {
         console.log("Not sending msg.storing in kafka.")
-        clientRedis.hmset(msg.receiver+":"+msg.datetime , messageBody);
+        clientRedis.hmset(msg.receiver+":"+msg.datetime , msg);
         
       }
 
